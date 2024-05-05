@@ -1,4 +1,3 @@
-# 導入Discord.py模組
 import discord
 import os
 from openai import OpenAI, OpenAIError  # 匯入 OpenAI 模組
@@ -6,7 +5,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
+from PIL import Image
+from io import BytesIO 
 import io
+import requests
 import textwrap
 
 # OpenAI API 金鑰
