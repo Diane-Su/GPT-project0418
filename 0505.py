@@ -75,17 +75,17 @@ async def on_message(message):
     elif len(message_log) == 2:
         selected_index = int(message.content.strip()) - 1
         selected_topic = responses['report_titles'][selected_index]
-        await message.channel.send(f"你選擇的報告主題是：{selected_topic}。正在生成摘要，請稍後......")
+        await message.channel.send(f"你選擇的報告主題是：{selected_topic}。正在生成前言，請稍後......")
         
         try:
             summary_response = openai_client.chat.completions.create(
                 model="gpt-4",
-                messages=[{"role": "user", "content": f"生成關於'{selected_topic}'的摘要"}],
+                messages=[{"role": "user", "content": f"生成關於'{selected_topic}'的前言"}],
             )
             summary = summary_response.choices[0].message.content
-            await message.channel.send(f"生成的摘要：\n{summary}")
+            await message.channel.send(f"生成的前言：\n{summary}")
             responses['summary'] = summary
-            await message.channel.send("你要進行存檔媽？請回覆‘是’或‘否’。")
+            await message.channel.send("你要進行存檔嗎？請回覆‘是’或‘否’。")
             responses['save_request'] = True  # 標記為需要等待存檔確認
             message_log.append(message.content)  # 更新日誌
         except OpenAIError as e:
@@ -108,8 +108,7 @@ async def on_message(message):
 
 # 生成 PDF 的函數
 def generate_pdf(direction, content, image_path, path):
-    # 使用正則表達式分割内容，确保每個點都在新的一行
-    lines = re.split(r'(?=\d+\.)', content.strip())  # 這會根據數字點（如1. 2.）分割文本
+    lines = textwrap.wrap(content, width=50) # 根據頁面寬度進行換行
     # 設定行高
     line_height = 25
     # 計算文本總高度
