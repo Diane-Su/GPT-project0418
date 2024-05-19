@@ -99,9 +99,19 @@ async def on_message(message):
             revised_intro = intro_response.choices[0].message.content
             await message.channel.send(f"修正後的內容介紹：\n{revised_intro}")
             responses['revised_intro'] = revised_intro
+            
+            # 提供實例和新聞連結
+            examples_response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": f"提供三個關於'{responses['report_topic']}'的應用實例和一個新聞連結。"}],
+            )
+            examples_and_link = examples_response.choices[0].message.content
+            await message.channel.send(f"相關實例和新聞連結：\n{examples_and_link}")
+            responses['examples_and_link'] = examples_and_link
+
             await message.channel.send("你要進行存檔嗎？請回覆‘是’或‘否’。")
-            message_log.append(message.content)
-            responses['save_request'] = True  # 標記為需要等待存檔確認
+            message_log.append(message.content)  # 更新日誌
+            responses['save_request'] = True
         except OpenAIError as e:
             await message.channel.send(f"OpenAI 連接錯誤: {e}")
 
@@ -112,27 +122,25 @@ async def on_message(message):
         image = Image.open(BytesIO(image_data))
         temp_image_path = f"{path}temp_image.png"
         image.save(temp_image_path)
-        generate_pdf(responses['report_topic'], responses['summary'], responses['revised_intro'], temp_image_path, path)
+        generate_pdf(responses['report_topic'], responses['summary'], responses['revised_intro'], responses['examples_and_link'], temp_image_path, path)
         await message.channel.send("檔案已成功儲存!")
         await message.channel.send(file=discord.File(f"{path}response.pdf"))
         responses['save_request'] = False  # 重置保存請求狀態
 
-def generate_pdf(direction, summary, intro, image_path, path):
-    # 創建 PDF 文件
+def generate_pdf(direction, summary, intro, examples_and_link, image_path, path):
     c = canvas.Canvas(f"{path}response.pdf", pagesize=A4)
     c.setFont("ChineseFont", 12)
-    margin = 72  # 頁邊距
+    margin = 72
     page_width, page_height = A4
     text_width = page_width - 2 * margin
-    text_y = page_height - margin  # 開始位置
+    text_y = page_height - margin
 
     # 寫入報告標題
     c.drawString(margin, text_y, f"標題：{direction}")
     text_y -= 30
 
-    # 寫入摘要
-    c.drawString(margin, text_y, "摘要：")
-    summary_lines = textwrap.wrap(summary, width=35)  # 自動換行
+    c.drawString(margin, text_y, "前言：")
+    summary_lines = textwrap.wrap(summary, width=38)  # 自動換行
     for line in summary_lines:
         text_y -= 15
         c.drawString(margin, text_y, line)
@@ -142,10 +150,20 @@ def generate_pdf(direction, summary, intro, image_path, path):
 
     # 寫入內容介紹
     c.drawString(margin, text_y, "內容介紹：")
-    intro_lines = textwrap.wrap(intro, width=30)  # 自動換行
+    intro_lines = textwrap.wrap(intro, width=38)  # 自動換行
     for line in intro_lines:
         text_y -= 15
         c.drawString(margin, text_y, line)
+
+    # 新增空行
+    text_y -= 20
+
+    # 寫入實例和新聞連結
+    c.drawString(margin, text_y, "相關實例和新聞連結：")
+    text_y -= 15
+    for line in textwrap.wrap(examples_and_link, width=38):
+        c.drawString(margin, text_y, line)
+        text_y -= 15
 
     # 插入圖片
     img = Image.open(image_path)
