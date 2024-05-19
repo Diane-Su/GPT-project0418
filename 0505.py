@@ -56,7 +56,6 @@ async def on_message(message):
             response_text = response.choices[0].message.content
             report_titles = response_text.split("\n")
             await message.channel.send(f"選擇的報告主題為：\n" + "\n".join(report_titles))
-
             response = openai_client.images.generate(
                 model="dall-e-3",
                 prompt=report_topic,
@@ -85,64 +84,75 @@ async def on_message(message):
             summary = summary_response.choices[0].message.content
             await message.channel.send(f"生成的前言：\n{summary}")
             responses['summary'] = summary
-            await message.channel.send("你要進行存檔嗎？請回覆‘是’或‘否’。")
-            responses['save_request'] = True  # 標記為需要等待存檔確認
+            await message.channel.send("請提供一段簡短的內容介紹，我們將幫你修正語句使其更正式完整。")
             message_log.append(message.content)  # 更新日誌
         except OpenAIError as e:
             await message.channel.send(f"OpenAI 連接錯誤: {e}")
 
+    elif len(message_log) == 3:
+        intro_text = message.content
+        try:
+            intro_response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": intro_text}],
+            )
+            revised_intro = intro_response.choices[0].message.content
+            await message.channel.send(f"修正後的內容介紹：\n{revised_intro}")
+            responses['revised_intro'] = revised_intro
+            await message.channel.send("你要進行存檔嗎？請回覆‘是’或‘否’。")
+            message_log.append(message.content)
+            responses['save_request'] = True  # 標記為需要等待存檔確認
+        except OpenAIError as e:
+            await message.channel.send(f"OpenAI 連接錯誤: {e}")
+
     elif responses.get('save_request') and message.content == '是':
-        # 使用者要存檔
         path = "C:/Users/scream/Downloads/"  # 設置默認保存路徑
-        response_text = responses['summary']
-        report_topic = responses['report_topic']
         image_url = responses['image_url']
         image_data = requests.get(image_url).content
         image = Image.open(BytesIO(image_data))
         temp_image_path = f"{path}temp_image.png"
         image.save(temp_image_path)
-        generate_pdf(report_topic, response_text, temp_image_path, path)
+        generate_pdf(responses['report_topic'], responses['summary'], responses['revised_intro'], temp_image_path, path)
         await message.channel.send("檔案已成功儲存!")
         await message.channel.send(file=discord.File(f"{path}response.pdf"))
         responses['save_request'] = False  # 重置保存請求狀態
 
-# 生成 PDF 的函數
-def generate_pdf(direction, content, image_path, path):
-    lines = textwrap.wrap(content, width=50) # 根據頁面寬度進行換行
-    # 設定行高
-    line_height = 25
-    # 計算文本總高度
-    text_height = len(lines) * line_height
-    # 計算頁面總高度
-    page_height = text_height + 800
-    
-    # 創建 PDF 並設定頁面大小
-    c = canvas.Canvas(f"{path}response.pdf", pagesize=(A4[0], page_height))
-    # 設定使用的字體
+def generate_pdf(direction, summary, intro, image_path, path):
+    # 創建 PDF 文件
+    c = canvas.Canvas(f"{path}response.pdf", pagesize=A4)
     c.setFont("ChineseFont", 12)
-    # 寫入 PDF 標題和摘要
-    c.drawString(100, page_height - 50, "標題：")
-    c.drawString(150, page_height - 50, direction)
-    c.drawString(100, page_height - 80, "摘要：")
-    
-    # 設定寫入文本的起始位置
-    text_x = 100
-    text_y = page_height - 80 - line_height
-    # 遍歷每行文本並寫入 PDF
-    for line in lines:
-        c.drawString(text_x, text_y, line)
-        text_y -= line_height
-    
-    # 調整圖像大小
-    image = Image.open(image_path)
-    image_width, image_height = image.size
-    max_image_width = A4[0] - 200
-    max_image_height = page_height - 200 - text_height
-    if image_width > max_image_width or image_height > max_image_height:
-        ratio = min(max_image_width / image_width, max_image_height / image_height)
-        image = image.resize((int(image_width * ratio), int(image_height * ratio)))
-    # Draw image on PDF
-    c.drawImage(image_path, 100, 100, width=image.size[0], height=image.size[1])
+    margin = 72  # 頁邊距
+    page_width, page_height = A4
+    text_width = page_width - 2 * margin
+    text_y = page_height - margin  # 開始位置
+
+    # 寫入報告標題
+    c.drawString(margin, text_y, f"標題：{direction}")
+    text_y -= 30
+
+    # 寫入摘要
+    c.drawString(margin, text_y, "摘要：")
+    summary_lines = textwrap.wrap(summary, width=35)  # 自動換行
+    for line in summary_lines:
+        text_y -= 15
+        c.drawString(margin, text_y, line)
+
+    # 新增空行
+    text_y -= 20
+
+    # 寫入內容介紹
+    c.drawString(margin, text_y, "內容介紹：")
+    intro_lines = textwrap.wrap(intro, width=30)  # 自動換行
+    for line in intro_lines:
+        text_y -= 15
+        c.drawString(margin, text_y, line)
+
+    # 插入圖片
+    img = Image.open(image_path)
+    img_width, img_height = img.size
+    scale = min(text_width / img_width, (text_y - margin) / img_height)
+    img = img.resize((int(img_width * scale), int(img_height * scale)))
+    c.drawInlineImage(img, margin, text_y - img_height * scale, width=img_width * scale, height=img_height * scale)
 
     # 保存 PDF 文件
     c.save()
