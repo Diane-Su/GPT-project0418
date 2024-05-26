@@ -139,6 +139,7 @@ def generate_pdf(direction, summary, intro, examples_and_link, image_path, path)
     c.drawString(margin, text_y, f"標題：{direction}")
     text_y -= 30
 
+    # 寫入前言
     c.drawString(margin, text_y, "前言：")
     summary_lines = textwrap.wrap(summary, width=38)  # 自動換行
     for line in summary_lines:
@@ -160,10 +161,10 @@ def generate_pdf(direction, summary, intro, examples_and_link, image_path, path)
 
     # 寫入實例和新聞連結
     c.drawString(margin, text_y, "相關實例和新聞連結：")
-    text_y -= 15
-    for line in textwrap.wrap(examples_and_link, width=38):
-        c.drawString(margin, text_y, line)
+    example_lines = textwrap.wrap(examples_and_link, width=38)  # 自動換行
+    for line in example_lines:
         text_y -= 15
+        c.drawString(margin, text_y, line)
 
     # 插入圖片
     img = Image.open(image_path)
