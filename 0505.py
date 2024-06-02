@@ -50,8 +50,8 @@ async def on_message(message):
         
         try:
             response = openai_client.chat.completions.create(
-                model="gpt-4", 
-                messages=[{"role": "user", "content": question_with_supplement}],
+                model="gpt-3.5-turbo", 
+                messages=[{"role": "user", "content": question_with_supplement}], 
             )
             response_text = response.choices[0].message.content
             report_titles = response_text.split("\n")
@@ -78,7 +78,7 @@ async def on_message(message):
         
         try:
             summary_response = openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": f"生成關於'{selected_topic}'的前言"}],
             )
             summary = summary_response.choices[0].message.content
@@ -93,7 +93,7 @@ async def on_message(message):
         intro_text = message.content
         try:
             intro_response = openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": intro_text}],
             )
             revised_intro = intro_response.choices[0].message.content
@@ -102,12 +102,11 @@ async def on_message(message):
             
             # 提供實例和新聞連結
             examples_response = openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[{"role": "user", "content": f"提供三個關於'{responses['report_topic']}'的應用實例和一個新聞連結。"}],
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": f"提供三個關於'{responses['report_topic']}'的應用實例。"}],
             )
-            examples_and_link = examples_response.choices[0].message.content
-            await message.channel.send(f"相關實例和新聞連結：\n{examples_and_link}")
-            responses['examples_and_link'] = examples_and_link
+            examples = examples_response.choices[0].message.content
+            responses['examples'] = examples
 
             await message.channel.send("你要進行存檔嗎？請回覆‘是’或‘否’。")
             message_log.append(message.content)  # 更新日誌
@@ -122,58 +121,76 @@ async def on_message(message):
         image = Image.open(BytesIO(image_data))
         temp_image_path = f"{path}temp_image.png"
         image.save(temp_image_path)
-        generate_pdf(responses['report_topic'], responses['summary'], responses['revised_intro'], responses['examples_and_link'], temp_image_path, path)
+        generate_pdf(responses['report_topic'], responses['summary'], responses['revised_intro'], responses['examples'], temp_image_path, path)
         await message.channel.send("檔案已成功儲存!")
         await message.channel.send(file=discord.File(f"{path}response.pdf"))
         responses['save_request'] = False  # 重置保存請求狀態
 
-def generate_pdf(direction, summary, intro, examples_and_link, image_path, path):
+def generate_pdf(direction, summary, intro, examples, image_path, path):
     c = canvas.Canvas(f"{path}response.pdf", pagesize=A4)
     c.setFont("ChineseFont", 12)
     margin = 72
     page_width, page_height = A4
-    text_width = page_width - 2 * margin
     text_y = page_height - margin
 
-    # 寫入報告標題
-    c.drawString(margin, text_y, f"標題：{direction}")
-    text_y -= 30
+    # 加載封面背景圖片
+    cover_image_path = 'C:/Users/scream/OneDrive/桌面/專題/GPT.webp'  # 替換為實際的圖片路徑
+    cover_image = Image.open(cover_image_path)
+    cover_image_w, cover_image_h = cover_image.size
+    cover_scale = min(page_width / cover_image_w, page_height / cover_image_h)
+    cover_image = cover_image.resize((int(cover_image_w * cover_scale), int(cover_image_h * cover_scale)))
+    c.drawInlineImage(cover_image, 0, 0, width=page_width, height=page_height)
+
+    # 創建封面
+    c.setFont("ChineseFont", 18)
+    c.drawCentredString(page_width / 2, page_height - 300, f"報告標題：{direction}")
+    c.setFont("ChineseFont", 14)
+    c.drawCentredString(page_width / 2, page_height - 350, "組員名稱: 張三, 李四, 王五")
+    c.drawCentredString(page_width / 2, page_height - 400, "指導老師: 鄞老師")
+    c.showPage()  # 新增一頁來開始內文
 
     # 寫入前言
+    c.setFont("ChineseFont", 16)  # 放大標題字體
     c.drawString(margin, text_y, "前言：")
-    summary_lines = textwrap.wrap(summary, width=38)  # 自動換行
+    text_y -= 30
+    c.setFont("ChineseFont", 12)
+    summary_lines = textwrap.wrap(summary, width=35)
     for line in summary_lines:
         text_y -= 15
         c.drawString(margin, text_y, line)
 
-    # 新增空行
-    text_y -= 20
+    text_y -= 30  # 增加更大的間距
 
     # 寫入內容介紹
+    c.setFont("ChineseFont", 16)
     c.drawString(margin, text_y, "內容介紹：")
-    intro_lines = textwrap.wrap(intro, width=38)  # 自動換行
+    text_y -= 30
+    c.setFont("ChineseFont", 12)
+    intro_lines = textwrap.wrap(intro, width=35)
     for line in intro_lines:
         text_y -= 15
         c.drawString(margin, text_y, line)
 
-    # 新增空行
-    text_y -= 20
+    text_y -= 30
 
-    # 寫入實例和新聞連結
-    c.drawString(margin, text_y, "相關實例和新聞連結：")
-    example_lines = textwrap.wrap(examples_and_link, width=38)  # 自動換行
-    for line in example_lines:
+    c.setFont("ChineseFont", 16)
+    c.drawString(margin, text_y, "相關實例：")
+    text_y -= 30
+    c.setFont("ChineseFont", 12)
+    example_lines = textwrap.wrap(examples, width=35)
+    for line in example_lines[:-1]:  # 假設最後一行是新聞連結
         text_y -= 15
         c.drawString(margin, text_y, line)
 
-    # 插入圖片
+    c.showPage()
+
+    # 處理並顯示圖片
     img = Image.open(image_path)
     img_width, img_height = img.size
-    scale = min(text_width / img_width, (text_y - margin) / img_height)
+    scale = min(page_width / img_width, page_height / img_height)
     img = img.resize((int(img_width * scale), int(img_height * scale)))
-    c.drawInlineImage(img, margin, text_y - img_height * scale, width=img_width * scale, height=img_height * scale)
+    c.drawInlineImage(img, 0, (page_height - img_height * scale) / 2, width=img_width * scale, height=img_height * scale)
 
-    # 保存 PDF 文件
     c.save()
     os.remove(image_path)
 
