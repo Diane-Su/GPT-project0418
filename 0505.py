@@ -106,6 +106,7 @@ async def on_message(message):
                 messages=[{"role": "user", "content": f"提供三個關於'{responses['report_topic']}'的應用實例。"}],
             )
             examples = examples_response.choices[0].message.content
+            await message.channel.send(f"相關應用實例：\n{examples}")
             responses['examples'] = examples
 
             await message.channel.send("你要進行存檔嗎？請回覆‘是’或‘否’。")
@@ -133,8 +134,9 @@ def generate_pdf(direction, summary, intro, examples, image_path, path):
     page_width, page_height = A4
     text_y = page_height - margin
 
-    # 加載封面背景圖片
-    cover_image_path = 'C:/Users/scream/OneDrive/桌面/專題/GPT.webp'  # 替換為實際的圖片路徑
+    # 隨機選擇背景圖片
+    bg_number = random.randint(1, 4)  # 生成1至4之間的隨機數
+    cover_image_path = f'C:/Users/scream/OneDrive/桌面/專題/bg{bg_number}.webp'  # 构建圖片路徑
     cover_image = Image.open(cover_image_path)
     cover_image_w, cover_image_h = cover_image.size
     cover_scale = min(page_width / cover_image_w, page_height / cover_image_h)
@@ -173,6 +175,7 @@ def generate_pdf(direction, summary, intro, examples, image_path, path):
 
     text_y -= 30
 
+    # 處理實例
     c.setFont("ChineseFont", 16)
     c.drawString(margin, text_y, "相關實例：")
     text_y -= 30
