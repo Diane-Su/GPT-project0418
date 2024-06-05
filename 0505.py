@@ -43,9 +43,9 @@ async def on_message(message):
         await message.channel.send("請問您想要做什麼樣的報告？請提供主題。")
         message_log.append(message.content)  # 儲存以便日後處理
 
-    elif len(message_log) == 1 and not message.content.startswith('存檔'):
+    elif len(message_log) == 1:
         report_topic = message.content
-        supplemental_text = "請針對該主題，提出四個跟該主題有關的報告標題。"
+        supplemental_text = "請針對該主題，提出四個跟該主題有關的報告主題。"
         question_with_supplement = f"{report_topic}\n\n{supplemental_text}"
         
         try:
@@ -127,6 +127,10 @@ async def on_message(message):
         await message.channel.send(file=discord.File(f"{path}response.pdf"))
         responses['save_request'] = False  # 重置保存請求狀態
 
+    elif responses.get('save_request') and message.content == '否':
+        await message.channel.send("感謝您!很高興能幫上您的忙!")
+        await client.close()
+
 def generate_pdf(direction, summary, intro, examples, image_path, path):
     c = canvas.Canvas(f"{path}response.pdf", pagesize=A4)
     c.setFont("ChineseFont", 12)
@@ -134,65 +138,86 @@ def generate_pdf(direction, summary, intro, examples, image_path, path):
     page_width, page_height = A4
     text_y = page_height - margin
 
-    # 隨機選擇背景圖片
+     # 隨機選擇背景圖片
     bg_number = random.randint(1, 4)  # 生成1至4之間的隨機數
     cover_image_path = f'C:/Users/scream/OneDrive/桌面/專題/bg{bg_number}.webp'  # 构建圖片路徑
     cover_image = Image.open(cover_image_path)
     cover_image_w, cover_image_h = cover_image.size
     cover_scale = min(page_width / cover_image_w, page_height / cover_image_h)
     cover_image = cover_image.resize((int(cover_image_w * cover_scale), int(cover_image_h * cover_scale)))
-    c.drawInlineImage(cover_image, 0, 0, width=page_width, height=page_height)
+
+    # Function to draw footer
+    def draw_footer():
+        c.drawInlineImage(cover_image, 0, 0, width=page_width, height=page_height)
+
+    draw_footer()
 
     # 創建封面
     c.setFont("ChineseFont", 18)
     c.drawCentredString(page_width / 2, page_height - 300, f"報告標題：{direction}")
     c.setFont("ChineseFont", 14)
-    c.drawCentredString(page_width / 2, page_height - 350, "組員名稱: 張三, 李四, 王五")
-    c.drawCentredString(page_width / 2, page_height - 400, "指導老師: 鄞老師")
+    c.drawCentredString(page_width / 2, page_height - 350, "組員名稱: 蘇德恩, 王品蓉, 陳培昕")
+    c.drawCentredString(page_width / 2, page_height - 400, "指導老師: 鄞宗賢老師")
     c.showPage()  # 新增一頁來開始內文
 
     # 寫入前言
     c.setFont("ChineseFont", 16)  # 放大標題字體
     c.drawString(margin, text_y, "前言：")
-    text_y -= 30
+    text_y -= 15
     c.setFont("ChineseFont", 12)
     summary_lines = textwrap.wrap(summary, width=35)
     for line in summary_lines:
         text_y -= 15
         c.drawString(margin, text_y, line)
 
-    text_y -= 30  # 增加更大的間距
+    text_y -= 25  # 增加更大的間距
 
     # 寫入內容介紹
     c.setFont("ChineseFont", 16)
     c.drawString(margin, text_y, "內容介紹：")
-    text_y -= 30
+    text_y -= 15
     c.setFont("ChineseFont", 12)
     intro_lines = textwrap.wrap(intro, width=35)
     for line in intro_lines:
         text_y -= 15
         c.drawString(margin, text_y, line)
 
-    text_y -= 30
-
-    # 處理實例
-    c.setFont("ChineseFont", 16)
-    c.drawString(margin, text_y, "相關實例：")
-    text_y -= 30
-    c.setFont("ChineseFont", 12)
-    example_lines = textwrap.wrap(examples, width=35)
-    for line in example_lines[:-1]:  # 假設最後一行是新聞連結
-        text_y -= 15
-        c.drawString(margin, text_y, line)
-
-    c.showPage()
+    text_y -= 25
 
     # 處理並顯示圖片
     img = Image.open(image_path)
     img_width, img_height = img.size
-    scale = min(page_width / img_width, page_height / img_height)
+    scale = min((page_width - 2 * margin) / img_width, (page_height - text_y - 200) / img_height, 0.25)  # 最大縮放比例為0.3
     img = img.resize((int(img_width * scale), int(img_height * scale)))
-    c.drawInlineImage(img, 0, (page_height - img_height * scale) / 2, width=img_width * scale, height=img_height * scale)
+    c.drawInlineImage(img, margin, text_y - img.height - 20, width=img.width, height=img.height)
+    
+    text_y -= img.height + 50  # 調整 text_y 位置
+    
+    # 檢查是否有足夠空間顯示相關實例
+    if text_y < margin:
+        c.showPage()  # 新增一頁
+        text_y = page_height - margin
+
+    # 處理相關實例，正確換行和對齊
+    c.setFont("ChineseFont", 16)
+    c.drawString(margin, text_y, "相關實例：")
+    text_y -= 30
+    c.setFont("ChineseFont", 12)
+    example_items = re.split(r'(\d+\.)', examples)  
+    for index, item in enumerate(example_items):
+        if index % 2 != 0:  
+            item_text = f"{item} {example_items[index + 1].strip()}"  
+        else:
+            continue 
+
+        wrapped_lines = textwrap.wrap(item_text, width=35)  
+        for line in wrapped_lines:
+            c.drawString(margin, text_y, line)
+            text_y -= 15  
+        text_y -= 20
+
+    c.showPage()
+    draw_footer()
 
     c.save()
     os.remove(image_path)
